@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — Orange Robot Store</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
+  :root{
+    --ink:#0d0b09; --smoke:#1a1410; --smoke2:#241d16; --smoke3:#2e2519;
+    --ash:#7a6e62; --key-gold:#c9a84c; --rust-glow:#e06820; --white:#f5f0e8;
+    --green:#4caf50;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--ink); color:var(--white); font-family:'Inter', sans-serif; padding: 1.5rem; }
+  h1{ font-family:'Cinzel', serif; color:var(--key-gold); font-size:1.4rem; text-align:center; margin-bottom:0.3rem; }
+  .nav{ text-align:center; margin-bottom:1.5rem; }
+  .nav a{ color:var(--ash); font-size:0.8rem; text-decoration:none; }
+  .nav a:hover{ color:var(--key-gold); }
+
+  .login-box{ max-width:320px; margin:4rem auto; text-align:center; }
+  .login-box input{
+    width:100%; padding:0.8rem; border-radius:8px; border:1px solid var(--smoke3);
+    background:var(--smoke2); color:var(--white); font-size:1rem; margin-bottom:0.8rem;
+  }
+  .login-box button{
+    width:100%; padding:0.8rem; border:none; border-radius:8px; background:var(--key-gold);
+    color:#1a1204; font-weight:700; cursor:pointer; font-family:'Cinzel', serif;
+  }
+  .err{ color:#d9534f; font-size:0.85rem; margin-top:0.6rem; }
+
+  #dashboard{ display:none; max-width:420px; margin:0 auto; }
+  .card{ background:var(--smoke2); border:1px solid var(--smoke3); border-radius:10px; padding:1.4rem; }
+  .field{ margin-bottom:1.1rem; }
+  .field label{
+    display:block; font-size:0.72rem; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--ash); margin-bottom:0.4rem;
+  }
+  .field .dollar-input{ position:relative; }
+  .field .dollar-input span{
+    position:absolute; left:0.8rem; top:50%; transform:translateY(-50%); color:var(--ash);
+  }
+  .field input{
+    width:100%; padding:0.7rem 0.8rem 0.7rem 1.6rem; border-radius:7px; border:1px solid var(--smoke3);
+    background:var(--smoke); color:var(--white); font-family:'IBM Plex Mono', monospace; font-size:1rem;
+  }
+  .field input:focus{ outline:none; border-color:var(--rust-glow); }
+  .save-btn{
+    width:100%; padding:0.85rem; border:none; border-radius:8px; background:var(--key-gold);
+    color:#1a1204; font-weight:700; cursor:pointer; font-family:'Cinzel', serif; letter-spacing:0.03em;
+  }
+  .save-btn:disabled{ opacity:0.5; cursor:default; }
+  .msg{ text-align:center; font-size:0.85rem; margin-top:0.9rem; min-height:1.2em; }
+  .msg.ok{ color:var(--green); }
+  .msg.error{ color:#d9534f; }
+  .hint{ font-size:0.75rem; color:var(--ash); text-align:center; margin-bottom:1.4rem; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<h1>🤖 Orange Robot — Settings</h1>
+<div class="nav"><a href="admin-orders.html">← Back to Orders</a></div>
+
+<div class="login-box" id="loginBox">
+  <input type="password" id="pwInput" placeholder="Admin password" />
+  <button id="loginBtn">UNLOCK</button>
+  <div class="err" id="loginErr"></div>
+</div>
+
+<div id="dashboard">
+  <div class="hint">Changes apply immediately to the live buy page — no redeploy needed.</div>
+  <div class="card">
+    <div class="field">
+      <label>Digital (EPUB) price</label>
+      <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="priceDigital" /></div>
+    </div>
+    <div class="field">
+      <label>Physical (paperback) price</label>
+      <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="pricePhysical" /></div>
+    </div>
+    <div class="field">
+      <label>US shipping</label>
+      <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="shippingUs" /></div>
+    </div>
+    <div class="field">
+      <label>International shipping</label>
+      <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="shippingIntl" /></div>
+    </div>
+    <div class="field">
+      <label>Bitcoin receive address</label>
+      <input type="text" id="walletAddress" style="padding-left:0.8rem; font-family:'IBM Plex Mono', monospace; font-size:0.85rem;" />
+    </div>
+    <button class="save-btn" id="saveBtn">SAVE CHANGES</button>
+    <div class="msg" id="saveMsg"></div>
+  </div>
+</div>
+
+<script>
+  // ⚠️ Same worker URL as buy.html / admin-orders.html.
+  const API_BASE = 'https://orange-robot-store.victor-cb4.workers.dev';
+  let PASSWORD = '';
+
+  const loginBox = document.getElementById('loginBox');
+  const dashboard = document.getElementById('dashboard');
+  const loginErr = document.getElementById('loginErr');
+  const saveMsg = document.getElementById('saveMsg');
+  const dollarFieldIds = ['priceDigital', 'pricePhysical', 'shippingUs', 'shippingIntl'];
+  const fieldIds = [...dollarFieldIds, 'walletAddress'];
+
+  document.getElementById('loginBtn').addEventListener('click', async ()=>{
+    PASSWORD = document.getElementById('pwInput').value;
+    const ok = await loadSettings();
+    if(ok){
+      loginBox.style.display = 'none';
+      dashboard.style.display = 'block';
+    }
+  });
+
+  async function loadSettings(){
+    try{
+      // /settings is public (just prices + address), but we still gate the
+      // whole page behind the admin password so nobody stumbles onto the editor.
+      const res = await fetch(API_BASE + '/settings');
+      if(!res.ok){
+        loginErr.textContent = 'Could not reach the store worker.';
+        return false;
+      }
+      const s = await res.json();
+      dollarFieldIds.forEach(id => { document.getElementById(id).value = (s[id] ?? 0).toFixed(2); });
+      document.getElementById('walletAddress').value = s.walletAddress ?? '';
+      return true;
+    } catch(e){
+      loginErr.textContent = 'Could not reach the store worker.';
+      return false;
+    }
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    saveMsg.textContent = 'Saving…';
+    saveMsg.className = 'msg';
+
+    const body = {};
+    for(const id of dollarFieldIds){
+      const v = document.getElementById(id).value;
+      if(v !== '') body[id] = parseFloat(v);
+    }
+    const addr = document.getElementById('walletAddress').value.trim();
+    if(addr) body.walletAddress = addr;
+
+    try{
+      const res = await fetch(API_BASE + '/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': PASSWORD },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if(res.status === 401){
+        saveMsg.textContent = 'Wrong password — refresh and log in again.';
+        saveMsg.className = 'msg error';
+      } else if(!res.ok){
+        saveMsg.textContent = data.error || 'Something went wrong.';
+        saveMsg.className = 'msg error';
+      } else {
+        dollarFieldIds.forEach(id => { document.getElementById(id).value = data.settings[id].toFixed(2); });
+        document.getElementById('walletAddress').value = data.settings.walletAddress ?? '';
+        saveMsg.textContent = '✓ Saved — live on the site now.';
+        saveMsg.className = 'msg ok';
+      }
+    } catch(e){
+      saveMsg.textContent = 'Could not reach the store worker.';
+      saveMsg.className = 'msg error';
+    }
+    btn.disabled = false;
+  });
+</script>
+</body>
+</html>
