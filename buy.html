@@ -205,6 +205,7 @@
 
       <div class="pay-panel">
         <div class="amt">Send <span id="physicalAmtUsd">$15.94</span></div>
+        <div style="font-size:0.72rem;color:var(--ash);margin-bottom:0.6rem;" id="physicalBreakdown"></div>
         <div class="amt-btc" id="physicalAmtBtc"></div>
         <div class="qr-box"><div id="physicalQr"></div></div>
         <div class="addr-row">
@@ -282,6 +283,50 @@
     document.getElementById(addrInputId).value = WALLET_ADDRESS;
   }
 
+  // Mirrors the server's tax table exactly, so the price shown here always
+  // matches what actually gets charged — the server recalculates
+  // independently at order time regardless, this is just for display.
+  const STATE_TAX_RATES = {
+    AL: 0.0929, AK: 0.0182, AZ: 0.0840, AR: 0.0948, CA: 0.0885,
+    CO: 0.0781, CT: 0.0635, DE: 0.0000, FL: 0.0702, GA: 0.0740,
+    HI: 0.0450, ID: 0.0602, IL: 0.0886, IN: 0.0700, IA: 0.0694,
+    KS: 0.0870, KY: 0.0600, LA: 0.1011, ME: 0.0550, MD: 0.0600,
+    MA: 0.0625, MI: 0.0600, MN: 0.0749, MS: 0.0707, MO: 0.0829,
+    MT: 0.0000, NE: 0.0694, NV: 0.0823, NH: 0.0000, NJ: 0.0660,
+    NM: 0.0772, NY: 0.0852, NC: 0.0698, ND: 0.0704, OH: 0.0724,
+    OK: 0.0895, OR: 0.0000, PA: 0.0634, RI: 0.0700, SC: 0.0746,
+    SD: 0.0640, TN: 0.0955, TX: 0.0820, UT: 0.0719, VT: 0.0624,
+    VA: 0.0575, WA: 0.0929, WV: 0.0650, WI: 0.0543, WY: 0.0536,
+    DC: 0.0600,
+  };
+  const STATE_NAME_TO_CODE = {
+    ALABAMA: 'AL', ALASKA: 'AK', ARIZONA: 'AZ', ARKANSAS: 'AR', CALIFORNIA: 'CA',
+    COLORADO: 'CO', CONNECTICUT: 'CT', DELAWARE: 'DE', FLORIDA: 'FL', GEORGIA: 'GA',
+    HAWAII: 'HI', IDAHO: 'ID', ILLINOIS: 'IL', INDIANA: 'IN', IOWA: 'IA',
+    KANSAS: 'KS', KENTUCKY: 'KY', LOUISIANA: 'LA', MAINE: 'ME', MARYLAND: 'MD',
+    MASSACHUSETTS: 'MA', MICHIGAN: 'MI', MINNESOTA: 'MN', MISSISSIPPI: 'MS', MISSOURI: 'MO',
+    MONTANA: 'MT', NEBRASKA: 'NE', NEVADA: 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ',
+    'NEW MEXICO': 'NM', 'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', OHIO: 'OH',
+    OKLAHOMA: 'OK', OREGON: 'OR', PENNSYLVANIA: 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+    'SOUTH DAKOTA': 'SD', TENNESSEE: 'TN', TEXAS: 'TX', UTAH: 'UT', VERMONT: 'VT',
+    VIRGINIA: 'VA', WASHINGTON: 'WA', 'WEST VIRGINIA': 'WV', WISCONSIN: 'WI', WYOMING: 'WY',
+    'DISTRICT OF COLUMBIA': 'DC', 'WASHINGTON DC': 'DC',
+  };
+  function normalizeStateCode(input){
+    const cleaned = (input || '').trim().toUpperCase().replace(/\./g, '');
+    if(STATE_TAX_RATES.hasOwnProperty(cleaned)) return cleaned;
+    if(STATE_NAME_TO_CODE.hasOwnProperty(cleaned)) return STATE_NAME_TO_CODE[cleaned];
+    return null;
+  }
+  function estimateSalesTax(priceUsd, countryCode, stateInput){
+    if((countryCode || '').toUpperCase() !== 'US') return 0;
+    const code = normalizeStateCode(stateInput);
+    if(!code) return 0;
+    const rate = STATE_TAX_RATES[code];
+    if(!rate) return 0;
+    return Math.round(priceUsd * rate * 100) / 100;
+  }
+
   function updateDigitalPanel(){
     document.getElementById('digitalAmtUsd').textContent = '$' + PRICE_DIGITAL.toFixed(2);
     document.getElementById('digitalAmtBtc').textContent = btcAmountText(PRICE_DIGITAL);
@@ -289,12 +334,19 @@
   }
   function updatePhysicalPanel(){
     const intl = shipCountry.value !== 'US';
-    const total = PRICE_PHYSICAL + (intl ? SHIP_INTL : SHIP_US);
+    const shippingFee = intl ? SHIP_INTL : SHIP_US;
+    const tax = estimateSalesTax(PRICE_PHYSICAL, shipCountry.value, document.getElementById('shipRegion').value);
+    const total = PRICE_PHYSICAL + shippingFee + tax;
+
     document.getElementById('physicalAmtUsd').textContent = '$' + total.toFixed(2);
+    document.getElementById('physicalBreakdown').textContent =
+      `Book $${PRICE_PHYSICAL.toFixed(2)} + Shipping $${shippingFee.toFixed(2)}` +
+      (tax > 0 ? ` + Est. sales tax $${tax.toFixed(2)}` : '');
     document.getElementById('physicalAmtBtc').textContent = btcAmountText(total);
     renderQr('physicalQr', 'physicalAddr', total);
   }
   shipCountry.addEventListener('change', updatePhysicalPanel);
+  document.getElementById('shipRegion').addEventListener('input', updatePhysicalPanel);
 
   document.querySelectorAll('.copy-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{

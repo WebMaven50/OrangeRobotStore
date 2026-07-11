@@ -209,7 +209,7 @@
         <td><span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">${o.id}</span><br/><span style="color:var(--ash);font-size:0.72rem;">${date}</span>${txid}${matched}${tracking}${refundNote}</td>
         <td>${o.format}</td>
         <td><span class="status-pill status-${statusClass}">${statusLabel}</span></td>
-        <td style="font-family:'IBM Plex Mono',monospace;">$${(o.amountUsd||0).toFixed(2)}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;">$${(o.amountUsd||0).toFixed(2)}${o.estimatedTax > 0 ? `<div style="font-size:0.65rem;color:var(--ash);font-family:'Inter',sans-serif;">incl. $${o.estimatedTax.toFixed(2)} est. tax</div>` : ''}</td>
         <td>${contact}</td>
         <td><div class="action-cell">${primaryAction}${secondaryActions}</div></td>
       </tr>`;
