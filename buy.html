@@ -187,7 +187,12 @@
       <div class="form-row"><label>Street Address</label><input type="text" id="shipAddress" /></div>
       <div class="form-grid-2">
         <div class="form-row"><label>City</label><input type="text" id="shipCity" /></div>
-        <div class="form-row"><label>State / Region</label><input type="text" id="shipRegion" /></div>
+        <div class="form-row" id="regionUsWrap"><label>State</label>
+          <select id="shipRegionUs">
+            <option value="">Select a state…</option>
+          </select>
+        </div>
+        <div class="form-row" id="regionIntlWrap" style="display:none;"><label>Region / Province</label><input type="text" id="shipRegionIntl" /></div>
       </div>
       <div class="form-grid-2">
         <div class="form-row"><label>Postal Code</label><input type="text" id="shipPostal" /></div>
@@ -335,7 +340,7 @@
   function updatePhysicalPanel(){
     const intl = shipCountry.value !== 'US';
     const shippingFee = intl ? SHIP_INTL : SHIP_US;
-    const tax = estimateSalesTax(PRICE_PHYSICAL, shipCountry.value, document.getElementById('shipRegion').value);
+    const tax = estimateSalesTax(PRICE_PHYSICAL, shipCountry.value, currentRegion());
     const total = PRICE_PHYSICAL + shippingFee + tax;
 
     document.getElementById('physicalAmtUsd').textContent = '$' + total.toFixed(2);
@@ -345,8 +350,50 @@
     document.getElementById('physicalAmtBtc').textContent = btcAmountText(total);
     renderQr('physicalQr', 'physicalAddr', total);
   }
-  shipCountry.addEventListener('change', updatePhysicalPanel);
-  document.getElementById('shipRegion').addEventListener('input', updatePhysicalPanel);
+  // ── State dropdown (US) vs free-text region (international) ──
+  const US_STATES = [
+    ['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],
+    ['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['DC','District of Columbia'],
+    ['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],
+    ['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],
+    ['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],
+    ['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],
+    ['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],
+    ['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],
+    ['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],
+    ['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],['VA','Virginia'],
+    ['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming'],
+  ];
+  const shipRegionUs = document.getElementById('shipRegionUs');
+  const shipRegionIntl = document.getElementById('shipRegionIntl');
+  const regionUsWrap = document.getElementById('regionUsWrap');
+  const regionIntlWrap = document.getElementById('regionIntlWrap');
+
+  US_STATES.forEach(([code, name])=>{
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = name;
+    shipRegionUs.appendChild(opt);
+  });
+
+  // Single source of truth for "what region did the buyer give us", regardless
+  // of which of the two inputs is currently showing.
+  function currentRegion(){
+    return shipCountry.value === 'US'
+      ? shipRegionUs.value
+      : shipRegionIntl.value.trim();
+  }
+
+  function syncRegionFields(){
+    const isUs = shipCountry.value === 'US';
+    regionUsWrap.style.display = isUs ? '' : 'none';
+    regionIntlWrap.style.display = isUs ? 'none' : '';
+  }
+
+  shipCountry.addEventListener('change', ()=>{ syncRegionFields(); updatePhysicalPanel(); });
+  shipRegionUs.addEventListener('change', updatePhysicalPanel);
+  shipRegionIntl.addEventListener('input', updatePhysicalPanel);
+  syncRegionFields();
 
   document.querySelectorAll('.copy-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -439,7 +486,7 @@
       name: document.getElementById('shipName').value.trim(),
       address: document.getElementById('shipAddress').value.trim(),
       city: document.getElementById('shipCity').value.trim(),
-      region: document.getElementById('shipRegion').value.trim(),
+      region: currentRegion(),
       postal: document.getElementById('shipPostal').value.trim(),
       country: shipCountry.value,
     };
@@ -448,6 +495,11 @@
     const statusEl = document.getElementById('physicalStatus');
     if(!shipping.name || !shipping.address || !shipping.city || !shipping.postal){
       statusEl.textContent = 'Please fill in your full shipping address.';
+      statusEl.className = 'status-msg error';
+      return;
+    }
+    if(shipCountry.value === 'US' && !shipping.region){
+      statusEl.textContent = 'Please select your state so we can calculate sales tax correctly.';
       statusEl.className = 'status-msg error';
       return;
     }
