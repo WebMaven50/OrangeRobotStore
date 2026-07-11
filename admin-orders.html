@@ -45,9 +45,16 @@
   }
   .ship-btn:disabled{ border-color:var(--smoke3); color:var(--ash); cursor:default; }
   .refresh-btn{
-    display:block; margin: 0 auto 1rem; padding:0.5rem 1.2rem; border-radius:8px; border:1px solid var(--smoke3);
+    display:inline-block; margin: 0 0.4rem 1rem; padding:0.5rem 1.2rem; border-radius:8px; border:1px solid var(--smoke3);
     background:var(--smoke2); color:var(--white); cursor:pointer; font-family:'Inter', sans-serif;
   }
+  .check-btn{
+    display:inline-block; margin: 0 0.4rem 1rem; padding:0.5rem 1.2rem; border-radius:8px; border:1px solid var(--rust-glow);
+    background:transparent; color:var(--rust-glow); cursor:pointer; font-family:'Inter', sans-serif;
+  }
+  .check-btn:disabled{ opacity:0.5; cursor:default; }
+  .btn-row{ text-align:center; }
+  .auto-badge{ font-size:0.65rem; color:var(--ash); }
 </style>
 </head>
 <body>
@@ -64,7 +71,11 @@
 </div>
 
 <div id="dashboard">
-  <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+  <div class="btn-row">
+    <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+    <button class="check-btn" id="checkBtn">⛓ Check for Payments Now</button>
+  </div>
+  <div class="btn-row" id="checkStatus" style="font-size:0.8rem;color:var(--ash);margin-bottom:0.8rem;"></div>
   <div class="summary" id="summary"></div>
   <table>
     <thead>
@@ -92,6 +103,32 @@
     }
   });
   document.getElementById('refreshBtn').addEventListener('click', loadOrders);
+  document.getElementById('checkBtn').addEventListener('click', checkPayments);
+
+  async function checkPayments(){
+    const btn = document.getElementById('checkBtn');
+    const statusEl = document.getElementById('checkStatus');
+    btn.disabled = true;
+    statusEl.textContent = 'Checking the blockchain…';
+    try{
+      const res = await fetch(API_BASE + '/admin/check-payments', {
+        method: 'POST',
+        headers: { 'X-Admin-Password': PASSWORD }
+      });
+      const data = await res.json();
+      if(!res.ok){
+        statusEl.textContent = data.error || 'Check failed.';
+      } else {
+        statusEl.textContent = data.verified > 0
+          ? `✓ Verified ${data.verified} order${data.verified===1?'':'s'} (checked ${data.checked} pending).`
+          : `No new payments found (checked ${data.checked} pending).`;
+      }
+      await loadOrders();
+    } catch(e){
+      statusEl.textContent = 'Could not reach the store worker.';
+    }
+    btn.disabled = false;
+  }
 
   async function loadOrders(){
     try{
@@ -130,7 +167,11 @@
       const contact = o.format === 'physical'
         ? `<div class="ship-addr">${o.shipping?.name||''}\n${o.shipping?.address||''}\n${o.shipping?.city||''}, ${o.shipping?.region||''} ${o.shipping?.postal||''}\n${o.shipping?.country||''}${o.email ? '\n'+o.email : ''}</div>`
         : (o.email || '<span style="color:var(--ash)">—</span>');
-      const txid = o.txid ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ash);word-break:break-all;margin-top:0.3rem;">TX: ${o.txid}</div>` : '';
+      const txid = o.txid ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ash);word-break:break-all;margin-top:0.3rem;">TX given: ${o.txid}</div>` : '';
+      const matched = o.matchedTxid ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--green);word-break:break-all;margin-top:0.2rem;">✓ matched: ${o.matchedTxid}</div>` : '';
+      const statusLabel = o.status === 'paid'
+        ? (o.autoVerified ? 'paid (auto)' : 'paid (manual)')
+        : 'unverified';
       const actionCell = o.status !== 'paid'
         ? `<button class="ship-btn" onclick="markPaid('${o.id}')">Mark Paid</button>`
         : (o.format === 'physical'
@@ -140,9 +181,9 @@
             : '<span style="color:var(--ash);font-size:0.78rem;">n/a</span>');
 
       return `<tr>
-        <td><span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">${o.id}</span><br/><span style="color:var(--ash);font-size:0.72rem;">${date}</span>${txid}</td>
+        <td><span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">${o.id}</span><br/><span style="color:var(--ash);font-size:0.72rem;">${date}</span>${txid}${matched}</td>
         <td>${o.format}</td>
-        <td><span class="status-pill status-${o.status==='paid'?'paid':'pending'}">${o.status==='paid'?'paid':'unverified'}</span></td>
+        <td><span class="status-pill status-${o.status==='paid'?'paid':'pending'}">${statusLabel}</span></td>
         <td style="font-family:'IBM Plex Mono',monospace;">$${(o.amountUsd||0).toFixed(2)}</td>
         <td>${contact}</td>
         <td>${actionCell}</td>
