@@ -200,6 +200,7 @@
 
       const secondaryActions = `
         <div>
+          ${!o.refunded && o.status === 'paid' && o.autoVerified ? `<button class="icon-btn" onclick="undoMatch('${o.id}')">↺ Undo Match</button>` : ''}
           ${!o.refunded && o.status === 'paid' ? `<button class="icon-btn" onclick="logRefund('${o.id}')">↩ Refund</button>` : ''}
           <button class="icon-btn danger" onclick="deleteOrder('${o.id}')">🗑 Delete</button>
         </div>`;
@@ -233,6 +234,15 @@
       method: 'POST',
       headers: { 'X-Admin-Password': PASSWORD, 'Content-Type': 'application/json' },
       body: JSON.stringify({ trackingNumber, trackingCarrier })
+    });
+    loadOrders();
+  };
+
+  window.undoMatch = async function(id){
+    if(!confirm("Undo this auto-match? This resets the order back to unverified, in case the blockchain check matched the wrong transaction.")) return;
+    await fetch(API_BASE + '/admin/unverify/' + id, {
+      method: 'POST',
+      headers: { 'X-Admin-Password': PASSWORD }
     });
     loadOrders();
   };
