@@ -38,12 +38,20 @@
   .status-pill{ padding:2px 8px; border-radius:20px; font-size:0.72rem; font-weight:700; }
   .status-paid{ background:rgba(76,175,80,0.15); color:var(--green); }
   .status-pending{ background:rgba(224,160,32,0.15); color:var(--amber); }
+  .status-refunded{ background:rgba(217,83,79,0.15); color:#d9534f; }
   .ship-addr{ font-size:0.78rem; color:var(--ash); white-space:pre-line; }
   .ship-btn{
     padding:5px 10px; border-radius:6px; border:1px solid var(--rust-glow); background:transparent;
     color:var(--rust-glow); font-size:0.75rem; cursor:pointer;
   }
   .ship-btn:disabled{ border-color:var(--smoke3); color:var(--ash); cursor:default; }
+  .icon-btn{
+    padding:4px 8px; border-radius:6px; border:1px solid var(--smoke3); background:transparent;
+    color:var(--ash); font-size:0.72rem; cursor:pointer; margin-left:4px;
+  }
+  .icon-btn:hover{ border-color:var(--ash); color:var(--white); }
+  .icon-btn.danger:hover{ border-color:#d9534f; color:#d9534f; }
+  .action-cell{ display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
   .refresh-btn{
     display:inline-block; margin: 0 0.4rem 1rem; padding:0.5rem 1.2rem; border-radius:8px; border:1px solid var(--smoke3);
     background:var(--smoke2); color:var(--white); cursor:pointer; font-family:'Inter', sans-serif;
@@ -149,7 +157,7 @@
   }
 
   function renderOrders(orders){
-    const paid = orders.filter(o=>o.status==='paid');
+    const paid = orders.filter(o=>o.status==='paid' && !o.refunded);
     const pendingVerify = orders.filter(o=>o.status!=='paid');
     const pendingShip = paid.filter(o=>o.format==='physical' && !o.shipped);
     const totalUsd = paid.reduce((s,o)=>s+(o.amountUsd||0),0);
@@ -158,7 +166,7 @@
       <div class="box"><div class="n">${orders.length}</div><div class="l">Total Orders</div></div>
       <div class="box"><div class="n">${pendingVerify.length}</div><div class="l">Awaiting Verification</div></div>
       <div class="box"><div class="n">${pendingShip.length}</div><div class="l">Awaiting Shipment</div></div>
-      <div class="box"><div class="n">$${totalUsd.toFixed(2)}</div><div class="l">Total Revenue (verified)</div></div>
+      <div class="box"><div class="n">$${totalUsd.toFixed(2)}</div><div class="l">Total Revenue (verified, minus refunds)</div></div>
     `;
 
     const body = document.getElementById('ordersBody');
@@ -169,24 +177,40 @@
         : (o.email || '<span style="color:var(--ash)">—</span>');
       const txid = o.txid ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--ash);word-break:break-all;margin-top:0.3rem;">TX given: ${o.txid}</div>` : '';
       const matched = o.matchedTxid ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--green);word-break:break-all;margin-top:0.2rem;">✓ matched: ${o.matchedTxid}</div>` : '';
-      const statusLabel = o.status === 'paid'
-        ? (o.autoVerified ? 'paid (auto)' : 'paid (manual)')
-        : 'unverified';
-      const actionCell = o.status !== 'paid'
-        ? `<button class="ship-btn" onclick="markPaid('${o.id}')">Mark Paid</button>`
-        : (o.format === 'physical'
-            ? (o.shipped
-                ? '<span style="color:var(--green);font-size:0.78rem;">✓ Shipped</span>'
-                : `<button class="ship-btn" onclick="markShipped('${o.id}')">Mark Shipped</button>`)
-            : '<span style="color:var(--ash);font-size:0.78rem;">n/a</span>');
+      const tracking = o.trackingNumber ? `<div style="font-size:0.72rem;color:var(--ash);margin-top:0.3rem;">📦 ${o.trackingCarrier ? o.trackingCarrier+': ' : ''}${o.trackingNumber}</div>` : '';
+      const refundNote = o.refunded ? `<div style="font-size:0.72rem;color:#d9534f;margin-top:0.3rem;">Refunded${o.refundNote ? ': '+o.refundNote : ''}</div>` : '';
+
+      let statusLabel, statusClass;
+      if(o.refunded){ statusLabel = 'refunded'; statusClass = 'refunded'; }
+      else if(o.status === 'paid'){ statusLabel = o.autoVerified ? 'paid (auto)' : 'paid (manual)'; statusClass = 'paid'; }
+      else { statusLabel = 'unverified'; statusClass = 'pending'; }
+
+      let primaryAction = '';
+      if(!o.refunded){
+        if(o.status !== 'paid'){
+          primaryAction = `<button class="ship-btn" onclick="markPaid('${o.id}')">Mark Paid</button>`;
+        } else if(o.format === 'physical'){
+          primaryAction = o.shipped
+            ? '<span style="color:var(--green);font-size:0.78rem;">✓ Shipped</span>'
+            : `<button class="ship-btn" onclick="markShipped('${o.id}')">Mark Shipped</button>`;
+        } else {
+          primaryAction = '<span style="color:var(--ash);font-size:0.78rem;">n/a</span>';
+        }
+      }
+
+      const secondaryActions = `
+        <div>
+          ${!o.refunded && o.status === 'paid' ? `<button class="icon-btn" onclick="logRefund('${o.id}')">↩ Refund</button>` : ''}
+          <button class="icon-btn danger" onclick="deleteOrder('${o.id}')">🗑 Delete</button>
+        </div>`;
 
       return `<tr>
-        <td><span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">${o.id}</span><br/><span style="color:var(--ash);font-size:0.72rem;">${date}</span>${txid}${matched}</td>
+        <td><span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">${o.id}</span><br/><span style="color:var(--ash);font-size:0.72rem;">${date}</span>${txid}${matched}${tracking}${refundNote}</td>
         <td>${o.format}</td>
-        <td><span class="status-pill status-${o.status==='paid'?'paid':'pending'}">${statusLabel}</span></td>
+        <td><span class="status-pill status-${statusClass}">${statusLabel}</span></td>
         <td style="font-family:'IBM Plex Mono',monospace;">$${(o.amountUsd||0).toFixed(2)}</td>
         <td>${contact}</td>
-        <td>${actionCell}</td>
+        <td><div class="action-cell">${primaryAction}${secondaryActions}</div></td>
       </tr>`;
     }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ash);padding:2rem;">No orders yet.</td></tr>';
   }
@@ -200,9 +224,35 @@
   };
 
   window.markShipped = async function(id){
+    const trackingNumber = prompt('Tracking number (optional, leave blank to skip):') || '';
+    let trackingCarrier = '';
+    if(trackingNumber.trim()){
+      trackingCarrier = prompt('Carrier (optional, e.g. USPS, UPS, FedEx):') || '';
+    }
     await fetch(API_BASE + '/admin/ship/' + id, {
       method: 'POST',
+      headers: { 'X-Admin-Password': PASSWORD, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackingNumber, trackingCarrier })
+    });
+    loadOrders();
+  };
+
+  window.deleteOrder = async function(id){
+    if(!confirm('Delete this order permanently? This cannot be undone.')) return;
+    await fetch(API_BASE + '/admin/delete/' + id, {
+      method: 'POST',
       headers: { 'X-Admin-Password': PASSWORD }
+    });
+    loadOrders();
+  };
+
+  window.logRefund = async function(id){
+    if(!confirm("This just logs the refund for your own records — you still need to send the Bitcoin back yourself from your wallet. Continue?")) return;
+    const note = prompt('Optional note (e.g. reason, amount sent back):') || '';
+    await fetch(API_BASE + '/admin/refund/' + id, {
+      method: 'POST',
+      headers: { 'X-Admin-Password': PASSWORD, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note })
     });
     loadOrders();
   };
