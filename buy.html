@@ -173,7 +173,7 @@
       </div>
 
       <div class="form-row txid">
-        <label>Transaction ID (optional, but speeds up verification)</label>
+        <label>Transaction ID (required — we use this to verify your payment before releasing the download)</label>
         <input type="text" id="digitalTxid" placeholder="e.g. 4a5e1e4baab89f3a..." />
       </div>
 
@@ -242,7 +242,6 @@
 (function(){
   // ⚠️ Replace with your deployed store worker URL after `wrangler deploy`.
   const API_BASE = 'https://orange-robot-store.victor-cb4.workers.dev';
-  const DIGITAL_FILE_URL = 'the-orange-robot.epub'; // this file must live at the repo root
 
   // Fallback numbers only — as soon as /settings responds, these get overwritten
   // with whatever's set in admin-settings.html.
@@ -449,7 +448,7 @@
       if(!res.ok){
         throw new Error(data.error || 'Something went wrong');
       }
-      showSuccess(format);
+      showSuccess(format, data.orderId, data.downloadReady);
     } catch(e){
       statusEl.textContent = 'Something went wrong: ' + e.message;
       statusEl.className = 'status-msg error';
@@ -457,16 +456,22 @@
     }
   }
 
-  function showSuccess(format){
+  function showSuccess(format, orderId, downloadReady){
     document.getElementById('pickerView').style.display = 'none';
     const successView = document.getElementById('successView');
     successView.classList.add('visible');
     if(format === 'digital'){
-      document.getElementById('successTitle').textContent = 'Thanks for picking up a copy!';
-      document.getElementById('successText').textContent =
-        "Your order is on record. Since this runs on the honor system, your download is ready right below — enjoy the book.";
-      document.getElementById('successAction').innerHTML =
-        '<a class="download-btn" href="' + DIGITAL_FILE_URL + '" download>⬇ Download Your Book</a>';
+      if(downloadReady){
+        document.getElementById('successTitle').textContent = 'Thanks for picking up a copy!';
+        document.getElementById('successText').textContent =
+          "We saw your payment show up — your download is ready right below. Enjoy the book.";
+        document.getElementById('successAction').innerHTML =
+          '<a class="download-btn" href="' + API_BASE + '/download/epub?order=' + encodeURIComponent(orderId) + '" download>⬇ Download Your Book</a>';
+      } else {
+        document.getElementById('successTitle').textContent = 'Order received!';
+        document.getElementById('successText').textContent =
+          "We haven't seen your payment show up on the network yet — as soon as we do (usually within a few minutes), we'll email you the download link.";
+      }
     } else {
       document.getElementById('successTitle').textContent = 'Order received!';
       document.getElementById('successText').textContent =
@@ -477,8 +482,14 @@
   document.getElementById('digitalPayBtn').addEventListener('click', ()=>{
     const email = document.getElementById('digitalEmail').value.trim();
     const txid = document.getElementById('digitalTxid').value.trim();
+    const statusEl = document.getElementById('digitalStatus');
+    if(!txid){
+      statusEl.textContent = 'Please enter the transaction ID from your Bitcoin wallet so we can verify your payment.';
+      statusEl.className = 'status-msg error';
+      return;
+    }
     submitOrder('digital', { format:'digital', email, txid },
-      document.getElementById('digitalStatus'), document.getElementById('digitalPayBtn'));
+      statusEl, document.getElementById('digitalPayBtn'));
   });
 
   document.getElementById('physicalPayBtn').addEventListener('click', ()=>{
