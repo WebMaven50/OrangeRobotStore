@@ -62,8 +62,11 @@
 <div class="nav"><a href="admin-orders.html">← Back to Orders</a></div>
 
 <div class="login-box" id="loginBox">
-  <input type="password" id="pwInput" placeholder="Admin password" />
-  <button id="loginBtn">UNLOCK</button>
+  <form id="loginForm" autocomplete="on">
+    <input type="text" name="username" autocomplete="username" value="admin" style="display:none" aria-hidden="true" tabindex="-1" />
+    <input type="password" id="pwInput" name="password" placeholder="Admin password" autocomplete="current-password" />
+    <button id="loginBtn" type="submit">UNLOCK</button>
+  </form>
   <div class="err" id="loginErr"></div>
 </div>
 
@@ -107,7 +110,8 @@
   const dollarFieldIds = ['priceDigital', 'pricePhysical', 'shippingUs', 'shippingIntl'];
   const fieldIds = [...dollarFieldIds, 'walletAddress'];
 
-  document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
     PASSWORD = document.getElementById('pwInput').value;
     const ok = await loadSettings();
     if(ok){
