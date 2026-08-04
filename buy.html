@@ -461,17 +461,19 @@
     document.getElementById('pickerView').style.display = 'none';
     const successView = document.getElementById('successView');
     successView.classList.add('visible');
+    const statusLink = '<div style="margin-top:1.1rem; font-family:\'Inter\', sans-serif; font-size:0.78rem; color:var(--ash);">Order ID: <span style="font-family:\'IBM Plex Mono\', monospace;">' + orderId + '</span><br/>Didn\'t get an email, or want to check back later? <a href="order-status.html?order=' + encodeURIComponent(orderId) + '" style="color:var(--rust-glow);">Bookmark this status link</a>.</div>';
     if(format === 'digital'){
       if(downloadReady){
         document.getElementById('successTitle').textContent = 'Thanks for picking up a copy!';
         document.getElementById('successText').textContent =
           "We saw your payment show up — your download is ready right below. Enjoy the book.";
         document.getElementById('successAction').innerHTML =
-          '<a class="download-btn" href="' + API_BASE + '/download/epub?order=' + encodeURIComponent(orderId) + '" download>⬇ Download Your Book</a>';
+          '<a class="download-btn" href="' + API_BASE + '/download/epub?order=' + encodeURIComponent(orderId) + '" download>⬇ Download Your Book</a>' + statusLink;
       } else {
         document.getElementById('successTitle').textContent = 'Order received!';
         document.getElementById('successText').textContent =
           "We haven't seen your payment show up on the network yet — as soon as we do (usually within a few minutes), we'll email you the download link.";
+        document.getElementById('successAction').innerHTML = statusLink;
       }
     } else {
       document.getElementById('successTitle').textContent = 'Order received!';
