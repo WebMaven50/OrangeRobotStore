@@ -134,9 +134,13 @@
 
   async function loadSettings(){
     try{
-      // /settings is public (just prices + address), but we still gate the
-      // whole page behind the admin password so nobody stumbles onto the editor.
-      const res = await fetch(API_BASE + '/settings');
+      const res = await fetch(API_BASE + '/admin/settings', {
+        headers: { 'X-Admin-Password': PASSWORD }
+      });
+      if(res.status === 401){
+        loginErr.textContent = 'Wrong password.';
+        return false;
+      }
       if(!res.ok){
         loginErr.textContent = 'Could not reach the store worker.';
         return false;
