@@ -96,6 +96,16 @@
     <button class="save-btn" id="saveBtn">SAVE CHANGES</button>
     <div class="msg" id="saveMsg"></div>
   </div>
+
+  <div class="card" style="margin-top:1.2rem;">
+    <div class="field">
+      <label>Ebook file (EPUB)</label>
+      <div id="epubInfo" style="font-family:'IBM Plex Mono', monospace; font-size:0.78rem; color:var(--ash); margin-bottom:0.9rem; line-height:1.6;">Loading…</div>
+      <input type="file" id="epubFile" accept=".epub" style="width:100%; margin-bottom:0.8rem; color:var(--white); font-size:0.85rem;" />
+    </div>
+    <button class="save-btn" id="uploadEpubBtn" type="button">UPLOAD NEW EPUB</button>
+    <div class="msg" id="epubMsg"></div>
+  </div>
 </div>
 
 <script>
@@ -117,6 +127,7 @@
     if(ok){
       loginBox.style.display = 'none';
       dashboard.style.display = 'block';
+      loadEpubInfo();
     }
   });
 
@@ -175,6 +186,67 @@
     } catch(e){
       saveMsg.textContent = 'Could not reach the store worker.';
       saveMsg.className = 'msg error';
+    }
+    btn.disabled = false;
+  });
+
+  async function loadEpubInfo(){
+    const el = document.getElementById('epubInfo');
+    try{
+      const res = await fetch(API_BASE + '/admin/epub', { headers: { 'X-Admin-Password': PASSWORD } });
+      if(!res.ok){ el.textContent = 'Could not load file info.'; return; }
+      const data = await res.json();
+      if(!data.exists){
+        el.textContent = 'No file uploaded yet.';
+        return;
+      }
+      const sizeMb = (data.sizeBytes / (1024*1024)).toFixed(2);
+      const uploaded = data.uploadedAt ? new Date(data.uploadedAt).toLocaleString() : 'unknown';
+      const last = data.recentDownloads[0] ? new Date(data.recentDownloads[0].timestamp).toLocaleString() : 'never';
+      el.innerHTML = `Current file: ${sizeMb} MB<br>Uploaded: ${uploaded}<br>Downloaded ${data.downloadCount} time${data.downloadCount === 1 ? '' : 's'} — last: ${last}`;
+    } catch(e){
+      el.textContent = 'Could not reach the store worker.';
+    }
+  }
+
+  document.getElementById('uploadEpubBtn').addEventListener('click', async ()=>{
+    const fileInput = document.getElementById('epubFile');
+    const file = fileInput.files[0];
+    const msg = document.getElementById('epubMsg');
+    if(!file){
+      msg.textContent = 'Choose a file first.';
+      msg.className = 'msg error';
+      return;
+    }
+    if(!confirm('This replaces the live download for everyone immediately. Continue?')) return;
+
+    const btn = document.getElementById('uploadEpubBtn');
+    btn.disabled = true;
+    msg.textContent = 'Uploading…';
+    msg.className = 'msg';
+    try{
+      const bytes = await file.arrayBuffer();
+      const res = await fetch(API_BASE + '/admin/upload-epub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/epub+zip', 'X-Admin-Password': PASSWORD },
+        body: bytes,
+      });
+      const data = await res.json();
+      if(res.status === 401){
+        msg.textContent = 'Wrong password — refresh and log in again.';
+        msg.className = 'msg error';
+      } else if(!res.ok){
+        msg.textContent = data.error || 'Something went wrong.';
+        msg.className = 'msg error';
+      } else {
+        msg.textContent = '✓ Uploaded — live now.';
+        msg.className = 'msg ok';
+        fileInput.value = '';
+        loadEpubInfo();
+      }
+    } catch(e){
+      msg.textContent = 'Could not reach the store worker.';
+      msg.className = 'msg error';
     }
     btn.disabled = false;
   });

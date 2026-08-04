@@ -242,7 +242,6 @@
 (function(){
   // ⚠️ Replace with your deployed store worker URL after `wrangler deploy`.
   const API_BASE = 'https://orange-robot-store.victor-cb4.workers.dev';
-  const DIGITAL_FILE_URL = 'the-orange-robot.epub'; // this file must live at the repo root
 
   // Fallback numbers only — as soon as /settings responds, these get overwritten
   // with whatever's set in admin-settings.html.
@@ -449,7 +448,7 @@
       if(!res.ok){
         throw new Error(data.error || 'Something went wrong');
       }
-      showSuccess(format);
+      showSuccess(format, data.orderId);
     } catch(e){
       statusEl.textContent = 'Something went wrong: ' + e.message;
       statusEl.className = 'status-msg error';
@@ -457,7 +456,7 @@
     }
   }
 
-  function showSuccess(format){
+  function showSuccess(format, orderId){
     document.getElementById('pickerView').style.display = 'none';
     const successView = document.getElementById('successView');
     successView.classList.add('visible');
@@ -465,8 +464,9 @@
       document.getElementById('successTitle').textContent = 'Thanks for picking up a copy!';
       document.getElementById('successText').textContent =
         "Your order is on record. Since this runs on the honor system, your download is ready right below — enjoy the book.";
+      const downloadUrl = API_BASE + '/download/epub' + (orderId ? '?order=' + encodeURIComponent(orderId) : '');
       document.getElementById('successAction').innerHTML =
-        '<a class="download-btn" href="' + DIGITAL_FILE_URL + '" download>⬇ Download Your Book</a>';
+        '<a class="download-btn" href="' + downloadUrl + '" download>⬇ Download Your Book</a>';
     } else {
       document.getElementById('successTitle').textContent = 'Order received!';
       document.getElementById('successText').textContent =
