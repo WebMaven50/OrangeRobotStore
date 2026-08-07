@@ -55,6 +55,10 @@
   .msg.ok{ color:var(--green); }
   .msg.error{ color:#d9534f; }
   .hint{ font-size:0.75rem; color:var(--ash); text-align:center; margin-bottom:1.4rem; line-height:1.5; }
+  .progress-wrap{ display:none; margin-bottom:0.9rem; }
+  .progress-track{ width:100%; height:8px; border-radius:4px; background:var(--smoke); overflow:hidden; }
+  .progress-bar{ height:100%; width:0%; background:var(--key-gold); transition:width 0.2s; }
+  .progress-text{ font-size:0.72rem; color:var(--ash); text-align:center; margin-top:0.4rem; }
 </style>
 </head>
 <body>
@@ -83,6 +87,10 @@
       <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="pricePhysical" /></div>
     </div>
     <div class="field">
+      <label>Audiobook price</label>
+      <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="priceAudiobook" /></div>
+    </div>
+    <div class="field">
       <label>US shipping</label>
       <div class="dollar-input"><span>$</span><input type="number" step="0.01" min="0" id="shippingUs" /></div>
     </div>
@@ -107,6 +115,30 @@
     <button class="save-btn" id="uploadEpubBtn" type="button">UPLOAD NEW EPUB</button>
     <div class="msg" id="epubMsg"></div>
   </div>
+
+  <div class="card" style="margin-top:1.2rem;">
+    <div class="field">
+      <label>Audiobook preview clip</label>
+      <div id="audiobookPreviewInfo" style="font-family:'IBM Plex Mono', monospace; font-size:0.78rem; color:var(--ash); margin-bottom:0.9rem; line-height:1.6;">Loading…</div>
+      <input type="file" id="audiobookPreviewFile" accept="audio/*" style="width:100%; margin-bottom:0.8rem; color:var(--white); font-size:0.85rem;" />
+    </div>
+    <button class="save-btn" id="uploadAudiobookPreviewBtn" type="button">UPLOAD NEW PREVIEW</button>
+    <div class="msg" id="audiobookPreviewMsg"></div>
+  </div>
+
+  <div class="card" style="margin-top:1.2rem;">
+    <div class="field">
+      <label>Audiobook (full)</label>
+      <div id="audiobookInfo" style="font-family:'IBM Plex Mono', monospace; font-size:0.78rem; color:var(--ash); margin-bottom:0.9rem; line-height:1.6;">Loading…</div>
+      <input type="file" id="audiobookFile" accept="audio/*" style="width:100%; margin-bottom:0.8rem; color:var(--white); font-size:0.85rem;" />
+    </div>
+    <div class="progress-wrap" id="audiobookProgressWrap">
+      <div class="progress-track"><div class="progress-bar" id="audiobookProgressBar"></div></div>
+      <div class="progress-text" id="audiobookProgressText"></div>
+    </div>
+    <button class="save-btn" id="uploadAudiobookBtn" type="button">UPLOAD NEW AUDIOBOOK</button>
+    <div class="msg" id="audiobookMsg"></div>
+  </div>
 </div>
 
 <script>
@@ -118,7 +150,7 @@
   const dashboard = document.getElementById('dashboard');
   const loginErr = document.getElementById('loginErr');
   const saveMsg = document.getElementById('saveMsg');
-  const dollarFieldIds = ['priceDigital', 'pricePhysical', 'shippingUs', 'shippingIntl'];
+  const dollarFieldIds = ['priceDigital', 'pricePhysical', 'priceAudiobook', 'shippingUs', 'shippingIntl'];
   const fieldIds = [...dollarFieldIds, 'walletAddress'];
 
   document.getElementById('loginForm').addEventListener('submit', async (e)=>{
@@ -129,6 +161,8 @@
       loginBox.style.display = 'none';
       dashboard.style.display = 'block';
       loadEpubInfo();
+      loadAudiobookPreviewInfo();
+      loadAudiobookInfo();
     }
   });
 
@@ -252,6 +286,173 @@
     } catch(e){
       msg.textContent = 'Could not reach the store worker.';
       msg.className = 'msg error';
+    }
+    btn.disabled = false;
+  });
+
+  async function loadAudiobookPreviewInfo(){
+    const el = document.getElementById('audiobookPreviewInfo');
+    try{
+      const res = await fetch(API_BASE + '/admin/audiobook-preview', { headers: { 'X-Admin-Password': PASSWORD } });
+      if(!res.ok){ el.textContent = 'Could not load file info.'; return; }
+      const data = await res.json();
+      if(!data.exists){
+        el.textContent = 'No preview uploaded yet.';
+        return;
+      }
+      const sizeMb = (data.sizeBytes / (1024*1024)).toFixed(2);
+      const uploaded = data.uploadedAt ? new Date(data.uploadedAt).toLocaleString() : 'unknown';
+      el.innerHTML = `Current preview: ${sizeMb} MB<br>Uploaded: ${uploaded}<br>Played ${data.playCount} time${data.playCount === 1 ? '' : 's'}`;
+    } catch(e){
+      el.textContent = 'Could not reach the store worker.';
+    }
+  }
+
+  document.getElementById('uploadAudiobookPreviewBtn').addEventListener('click', async ()=>{
+    const fileInput = document.getElementById('audiobookPreviewFile');
+    const file = fileInput.files[0];
+    const msg = document.getElementById('audiobookPreviewMsg');
+    if(!file){
+      msg.textContent = 'Choose a file first.';
+      msg.className = 'msg error';
+      return;
+    }
+    if(!confirm('This replaces the live preview clip for everyone immediately. Continue?')) return;
+
+    const btn = document.getElementById('uploadAudiobookPreviewBtn');
+    btn.disabled = true;
+    msg.textContent = 'Uploading…';
+    msg.className = 'msg';
+    try{
+      const bytes = await file.arrayBuffer();
+      const res = await fetch(API_BASE + '/admin/upload-audiobook-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'audio/mpeg', 'X-Admin-Password': PASSWORD },
+        body: bytes,
+      });
+      const data = await res.json();
+      if(res.status === 401){
+        msg.textContent = 'Wrong password — refresh and log in again.';
+        msg.className = 'msg error';
+      } else if(!res.ok){
+        msg.textContent = data.error || 'Something went wrong.';
+        msg.className = 'msg error';
+      } else {
+        msg.textContent = '✓ Uploaded — live now.';
+        msg.className = 'msg ok';
+        fileInput.value = '';
+        loadAudiobookPreviewInfo();
+      }
+    } catch(e){
+      msg.textContent = 'Could not reach the store worker.';
+      msg.className = 'msg error';
+    }
+    btn.disabled = false;
+  });
+
+  async function loadAudiobookInfo(){
+    const el = document.getElementById('audiobookInfo');
+    try{
+      const res = await fetch(API_BASE + '/admin/audiobook', { headers: { 'X-Admin-Password': PASSWORD } });
+      if(!res.ok){ el.textContent = 'Could not load file info.'; return; }
+      const data = await res.json();
+      if(!data.exists){
+        el.textContent = 'No file uploaded yet.';
+        return;
+      }
+      const sizeMb = (data.sizeBytes / (1024*1024)).toFixed(1);
+      const uploaded = data.uploadedAt ? new Date(data.uploadedAt).toLocaleString() : 'unknown';
+      const last = data.recentDownloads[0] ? new Date(data.recentDownloads[0].timestamp).toLocaleString() : 'never';
+      el.innerHTML = `Current file: ${sizeMb} MB<br>Uploaded: ${uploaded}<br>Downloaded ${data.downloadCount} time${data.downloadCount === 1 ? '' : 's'} — last: ${last}`;
+    } catch(e){
+      el.textContent = 'Could not reach the store worker.';
+    }
+  }
+
+  const AUDIOBOOK_CHUNK_SIZE = 20 * 1024 * 1024;
+
+  document.getElementById('uploadAudiobookBtn').addEventListener('click', async ()=>{
+    const fileInput = document.getElementById('audiobookFile');
+    const file = fileInput.files[0];
+    const msg = document.getElementById('audiobookMsg');
+    const progressWrap = document.getElementById('audiobookProgressWrap');
+    const progressBar = document.getElementById('audiobookProgressBar');
+    const progressText = document.getElementById('audiobookProgressText');
+    if(!file){
+      msg.textContent = 'Choose a file first.';
+      msg.className = 'msg error';
+      return;
+    }
+    if(!confirm('This replaces the live audiobook download for everyone immediately. Large files can take a while — keep this tab open until it finishes. Continue?')) return;
+
+    const btn = document.getElementById('uploadAudiobookBtn');
+    btn.disabled = true;
+    msg.textContent = '';
+    msg.className = 'msg';
+    progressWrap.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Starting upload…';
+
+    let uploadId = null;
+    try{
+      const startRes = await fetch(API_BASE + '/admin/audiobook-upload/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': PASSWORD },
+        body: JSON.stringify({ contentType: file.type || 'audio/mpeg' }),
+      });
+      if(startRes.status === 401) throw new Error('Wrong password — refresh and log in again.');
+      const startData = await startRes.json();
+      if(!startRes.ok) throw new Error(startData.error || 'Could not start upload.');
+      uploadId = startData.uploadId;
+
+      const totalParts = Math.ceil(file.size / AUDIOBOOK_CHUNK_SIZE);
+      const parts = [];
+      for(let i = 0; i < totalParts; i++){
+        const partNumber = i + 1;
+        const start = i * AUDIOBOOK_CHUNK_SIZE;
+        const end = Math.min(start + AUDIOBOOK_CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        const partRes = await fetch(API_BASE + '/admin/audiobook-upload/part?uploadId=' + encodeURIComponent(uploadId) + '&partNumber=' + partNumber, {
+          method: 'POST',
+          headers: { 'X-Admin-Password': PASSWORD },
+          body: chunk,
+        });
+        const partData = await partRes.json();
+        if(!partRes.ok) throw new Error(partData.error || ('Part ' + partNumber + ' failed.'));
+        parts.push({ partNumber: partData.partNumber, etag: partData.etag });
+
+        const pct = Math.round((partNumber / totalParts) * 100);
+        progressBar.style.width = pct + '%';
+        progressText.textContent = `Uploading… ${pct}% (part ${partNumber} of ${totalParts})`;
+      }
+
+      progressText.textContent = 'Finishing up…';
+      const completeRes = await fetch(API_BASE + '/admin/audiobook-upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': PASSWORD },
+        body: JSON.stringify({ uploadId, parts }),
+      });
+      const completeData = await completeRes.json();
+      if(!completeRes.ok) throw new Error(completeData.error || 'Could not complete upload.');
+
+      msg.textContent = '✓ Uploaded — live now.';
+      msg.className = 'msg ok';
+      fileInput.value = '';
+      progressWrap.style.display = 'none';
+      loadAudiobookInfo();
+    } catch(e){
+      msg.textContent = e.message || 'Upload failed.';
+      msg.className = 'msg error';
+      progressWrap.style.display = 'none';
+      if(uploadId){
+        try{
+          await fetch(API_BASE + '/admin/audiobook-upload/abort', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Password': PASSWORD },
+            body: JSON.stringify({ uploadId }),
+          });
+        } catch(abortErr){ /* best effort cleanup */ }
+      }
     }
     btn.disabled = false;
   });

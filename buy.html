@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://orange-robot-store.victor-cb4.workers.dev https://api.coingecko.com; frame-src 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self' https://orange-robot-store.victor-cb4.workers.dev; connect-src 'self' https://orange-robot-store.victor-cb4.workers.dev https://api.coingecko.com; frame-src 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buy The Orange Robot</title>
@@ -48,8 +48,22 @@
     font-size:1.1rem; margin-bottom:2.4rem;
   }
 
-  .options{ display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:2rem; }
-  @media (max-width:560px){ .options{ grid-template-columns: 1fr; } }
+  .options{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1rem; margin-bottom:2rem; }
+  @media (max-width:720px){ .options{ grid-template-columns: 1fr 1fr; } }
+  @media (max-width:420px){ .options{ grid-template-columns: 1fr; } }
+
+  .preview-box{
+    background: var(--smoke2); border:1px solid var(--smoke3); border-radius:10px;
+    padding:1.2rem 1.4rem; margin-bottom:1.6rem; text-align:center;
+  }
+  .preview-label{
+    font-family:'Cinzel', serif; font-size:0.85rem; letter-spacing:0.04em;
+    color:var(--key-gold); margin-bottom:0.5rem;
+  }
+  .preview-box audio{ width:100%; max-width:420px; }
+  .preview-unavailable{
+    font-family:'Inter', sans-serif; font-size:0.82rem; color:var(--ash); font-style:italic;
+  }
 
   .option-card{
     background: var(--smoke2); border:1px solid var(--smoke3); border-radius:10px;
@@ -141,12 +155,24 @@
     <h1>Get The Orange Robot</h1>
     <div class="subtitle">Self-custody, start to finish — pay directly, no middleman.</div>
 
+    <div class="preview-box" id="previewBox">
+      <div class="preview-label">🎧 Free Preview</div>
+      <audio id="previewAudio" controls preload="none" src="https://orange-robot-store.victor-cb4.workers.dev/preview/audiobook"></audio>
+      <div class="preview-unavailable" id="previewUnavailable" style="display:none;">Audiobook preview coming soon.</div>
+    </div>
+
     <div class="options">
       <div class="option-card" data-format="digital" id="cardDigital">
         <div class="option-icon">📖</div>
         <div class="option-title">DIGITAL COPY</div>
         <div class="option-price" id="priceDigital">$3.99</div>
         <div class="option-desc">Instant download after payment. EPUB format.</div>
+      </div>
+      <div class="option-card" data-format="audiobook" id="cardAudiobook">
+        <div class="option-icon">🎧</div>
+        <div class="option-title">AUDIOBOOK</div>
+        <div class="option-price" id="priceAudiobook">$5.99</div>
+        <div class="option-desc">Instant download after payment. MP3/M4B format.</div>
       </div>
       <div class="option-card" data-format="physical" id="cardPhysical">
         <div class="option-icon">📦</div>
@@ -180,6 +206,32 @@
 
       <button class="pay-btn" id="digitalPayBtn">I'VE SENT THE PAYMENT</button>
       <div class="status-msg" id="digitalStatus"></div>
+    </div>
+
+    <div class="form-card" id="audiobookForm">
+      <div class="form-row">
+        <label>Email (optional — for your records, not required)</label>
+        <input type="email" id="audiobookEmail" placeholder="you@example.com" />
+      </div>
+
+      <div class="pay-panel">
+        <div class="amt">Send <span id="audiobookAmtUsd">$5.99</span></div>
+        <div class="amt-btc" id="audiobookAmtBtc"></div>
+        <div class="qr-box"><div id="audiobookQr"></div></div>
+        <div class="addr-row">
+          <input type="text" id="audiobookAddr" readonly />
+          <button class="copy-btn" data-copy-target="audiobookAddr">COPY</button>
+        </div>
+        <div class="hint">Scan with any Bitcoin wallet, or copy the address and send manually. Sending the exact amount helps us verify your payment quickly.</div>
+      </div>
+
+      <div class="form-row txid">
+        <label>Transaction ID (required — we use this to verify your payment before releasing the download)</label>
+        <input type="text" id="audiobookTxid" placeholder="e.g. 4a5e1e4baab89f3a..." />
+      </div>
+
+      <button class="pay-btn" id="audiobookPayBtn">I'VE SENT THE PAYMENT</button>
+      <div class="status-msg" id="audiobookStatus"></div>
     </div>
 
     <div class="form-card" id="physicalForm">
@@ -248,25 +300,31 @@
   // with whatever's set in admin-settings.html.
   let PRICE_DIGITAL = 3.99;
   let PRICE_PHYSICAL = 9.99;
+  let PRICE_AUDIOBOOK = 5.99;
   let SHIP_US = 5.95;
   let SHIP_INTL = 12.95;
   let WALLET_ADDRESS = '';
   let BTC_USD_RATE = null; // fetched from CoinGecko; null means "unknown, show USD only"
 
   const cardDigital = document.getElementById('cardDigital');
+  const cardAudiobook = document.getElementById('cardAudiobook');
   const cardPhysical = document.getElementById('cardPhysical');
   const digitalForm = document.getElementById('digitalForm');
+  const audiobookForm = document.getElementById('audiobookForm');
   const physicalForm = document.getElementById('physicalForm');
   const shipCountry = document.getElementById('shipCountry');
 
-  cardDigital.addEventListener('click', ()=>{
-    cardDigital.classList.add('selected'); cardPhysical.classList.remove('selected');
-    digitalForm.classList.add('visible'); physicalForm.classList.remove('visible');
-  });
-  cardPhysical.addEventListener('click', ()=>{
-    cardPhysical.classList.add('selected'); cardDigital.classList.remove('selected');
-    physicalForm.classList.add('visible'); digitalForm.classList.remove('visible');
-  });
+  const allCards = [cardDigital, cardAudiobook, cardPhysical];
+  const allForms = [digitalForm, audiobookForm, physicalForm];
+  function selectFormat(card, form){
+    allCards.forEach(c=>c.classList.remove('selected'));
+    allForms.forEach(f=>f.classList.remove('visible'));
+    card.classList.add('selected');
+    form.classList.add('visible');
+  }
+  cardDigital.addEventListener('click', ()=> selectFormat(cardDigital, digitalForm));
+  cardAudiobook.addEventListener('click', ()=> selectFormat(cardAudiobook, audiobookForm));
+  cardPhysical.addEventListener('click', ()=> selectFormat(cardPhysical, physicalForm));
 
   function btcAmountText(usd){
     if(!BTC_USD_RATE) return '';
@@ -336,6 +394,11 @@
     document.getElementById('digitalAmtUsd').textContent = '$' + PRICE_DIGITAL.toFixed(2);
     document.getElementById('digitalAmtBtc').textContent = btcAmountText(PRICE_DIGITAL);
     renderQr('digitalQr', 'digitalAddr', PRICE_DIGITAL);
+  }
+  function updateAudiobookPanel(){
+    document.getElementById('audiobookAmtUsd').textContent = '$' + PRICE_AUDIOBOOK.toFixed(2);
+    document.getElementById('audiobookAmtBtc').textContent = btcAmountText(PRICE_AUDIOBOOK);
+    renderQr('audiobookQr', 'audiobookAddr', PRICE_AUDIOBOOK);
   }
   function updatePhysicalPanel(){
     const intl = shipCountry.value !== 'US';
@@ -414,6 +477,7 @@
         const s = await res.json();
         if(typeof s.priceDigital === 'number') PRICE_DIGITAL = s.priceDigital;
         if(typeof s.pricePhysical === 'number') PRICE_PHYSICAL = s.pricePhysical;
+        if(typeof s.priceAudiobook === 'number') PRICE_AUDIOBOOK = s.priceAudiobook;
         if(typeof s.shippingUs === 'number') SHIP_US = s.shippingUs;
         if(typeof s.shippingIntl === 'number') SHIP_INTL = s.shippingIntl;
         if(typeof s.walletAddress === 'string') WALLET_ADDRESS = s.walletAddress;
@@ -422,6 +486,7 @@
 
     document.getElementById('priceDigital').textContent = '$' + PRICE_DIGITAL.toFixed(2);
     document.getElementById('pricePhysical').textContent = '$' + PRICE_PHYSICAL.toFixed(2);
+    document.getElementById('priceAudiobook').textContent = '$' + PRICE_AUDIOBOOK.toFixed(2);
 
     try{
       const rateRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
@@ -432,8 +497,16 @@
     } catch(e){ /* show USD-only, that's fine */ }
 
     updateDigitalPanel();
+    updateAudiobookPanel();
     updatePhysicalPanel();
   })();
+
+  const previewAudio = document.getElementById('previewAudio');
+  const previewUnavailable = document.getElementById('previewUnavailable');
+  previewAudio.addEventListener('error', ()=>{
+    previewAudio.style.display = 'none';
+    previewUnavailable.style.display = 'block';
+  });
 
   async function submitOrder(format, payload, statusEl, btnEl){
     btnEl.disabled = true;
@@ -462,13 +535,15 @@
     const successView = document.getElementById('successView');
     successView.classList.add('visible');
     const statusLink = '<div style="margin-top:1.1rem; font-family:\'Inter\', sans-serif; font-size:0.78rem; color:var(--ash);">Order ID: <span style="font-family:\'IBM Plex Mono\', monospace;">' + orderId + '</span><br/>Didn\'t get an email, or want to check back later? <a href="order-status.html?order=' + encodeURIComponent(orderId) + '" style="color:var(--rust-glow);">Bookmark this status link</a>.</div>';
-    if(format === 'digital'){
+    if(format === 'digital' || format === 'audiobook'){
+      const downloadPath = format === 'audiobook' ? '/download/audiobook' : '/download/epub';
+      const label = format === 'audiobook' ? 'audiobook' : 'book';
       if(downloadReady){
         document.getElementById('successTitle').textContent = 'Thanks for picking up a copy!';
         document.getElementById('successText').textContent =
-          "We saw your payment show up — your download is ready right below. Enjoy the book.";
+          "We saw your payment show up — your download is ready right below. Enjoy the " + label + ".";
         document.getElementById('successAction').innerHTML =
-          '<a class="download-btn" href="' + API_BASE + '/download/epub?order=' + encodeURIComponent(orderId) + '" download>⬇ Download Your Book</a>' + statusLink;
+          '<a class="download-btn" href="' + API_BASE + downloadPath + '?order=' + encodeURIComponent(orderId) + '" download>⬇ Download Your ' + (format === 'audiobook' ? 'Audiobook' : 'Book') + '</a>' + statusLink;
       } else {
         document.getElementById('successTitle').textContent = 'Order received!';
         document.getElementById('successText').textContent =
@@ -493,6 +568,19 @@
     }
     submitOrder('digital', { format:'digital', email, txid },
       statusEl, document.getElementById('digitalPayBtn'));
+  });
+
+  document.getElementById('audiobookPayBtn').addEventListener('click', ()=>{
+    const email = document.getElementById('audiobookEmail').value.trim();
+    const txid = document.getElementById('audiobookTxid').value.trim();
+    const statusEl = document.getElementById('audiobookStatus');
+    if(!txid){
+      statusEl.textContent = 'Please enter the transaction ID from your Bitcoin wallet so we can verify your payment.';
+      statusEl.className = 'status-msg error';
+      return;
+    }
+    submitOrder('audiobook', { format:'audiobook', email, txid },
+      statusEl, document.getElementById('audiobookPayBtn'));
   });
 
   document.getElementById('physicalPayBtn').addEventListener('click', ()=>{

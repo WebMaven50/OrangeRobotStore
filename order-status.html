@@ -158,14 +158,16 @@
     const action = document.getElementById('resultAction');
     action.innerHTML = '';
 
-    if(o.format === 'digital'){
+    if(o.format === 'digital' || o.format === 'audiobook'){
+      const downloadPath = o.format === 'audiobook' ? '/download/audiobook' : '/download/epub';
+      const label = o.format === 'audiobook' ? 'Audiobook' : 'Book';
       if(o.downloadReady){
         emoji.textContent = '🎉';
         title.textContent = 'Your download is ready!';
         pill.textContent = 'ready';
         pill.className = 'status-pill status-ready';
-        text.textContent = "We've seen your payment — here's your book.";
-        action.innerHTML = '<a class="download-btn" href="' + API_BASE + '/download/epub?order=' + encodeURIComponent(o.id) + '" download>⬇ Download Your Book</a>';
+        text.textContent = "We've seen your payment — here's your " + label.toLowerCase() + ".";
+        action.innerHTML = '<a class="download-btn" href="' + API_BASE + downloadPath + '?order=' + encodeURIComponent(o.id) + '" download>⬇ Download Your ' + label + '</a>';
       } else {
         emoji.textContent = '⏳';
         title.textContent = 'Still waiting on payment';
