@@ -64,7 +64,7 @@
 <body>
 
 <h1>🤖 Orange Robot — Settings</h1>
-<div class="nav"><a href="admin-orders.html">← Back to Orders</a></div>
+<div class="nav"><a href="admin-orders.html">← Back to Orders</a> &nbsp;·&nbsp; <a href="admin-downloads.html">⬇ Download Log</a></div>
 
 <div class="login-box" id="loginBox">
   <form id="loginForm" autocomplete="on">
@@ -174,6 +174,20 @@
   // ⚠️ Same worker URL as buy.html / admin-orders.html.
   const API_BASE = 'https://orange-robot-store.victor-cb4.workers.dev';
   let PASSWORD = '';
+
+  function copyBtnHtml(text){
+    return `<button class="copy-btn" data-copy="${text.replace(/"/g, '&quot;')}" style="padding:1px 8px;border-radius:6px;border:1px solid var(--smoke3);background:transparent;color:var(--ash);font-size:0.68rem;cursor:pointer;margin-left:6px;font-family:'Inter',sans-serif;">copy</button>`;
+  }
+  function attachCopyButtons(container){
+    container.querySelectorAll('.copy-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        navigator.clipboard?.writeText(btn.dataset.copy).catch(()=>{});
+        const orig = btn.textContent;
+        btn.textContent = 'copied';
+        setTimeout(()=>{ btn.textContent = orig; }, 1200);
+      });
+    });
+  }
 
   const loginBox = document.getElementById('loginBox');
   const dashboard = document.getElementById('dashboard');
@@ -516,12 +530,13 @@
         if(format === 'digital' || format === 'audiobook'){
           const path = format === 'audiobook' ? '/download/audiobook' : '/download/epub';
           const url = API_BASE + path + '?order=' + encodeURIComponent(data.orderId);
-          downloadHtml = `<br><a href="${url}" style="color:var(--rust-glow);word-break:break-all;">${url}</a>`;
+          downloadHtml = `<br><a href="${url}" style="color:var(--rust-glow);word-break:break-all;">${url}</a>${copyBtnHtml(url)}`;
         } else {
           downloadHtml = '<br>Physical test order — find it in Orders to test the "Mark Shipped" flow.';
         }
         resultEl.style.display = 'block';
-        resultEl.innerHTML = `Order ID: <span style="font-family:'IBM Plex Mono',monospace;">${data.orderId}</span>${downloadHtml}`;
+        resultEl.innerHTML = `Order ID: <span style="font-family:'IBM Plex Mono',monospace;">${data.orderId}</span>${copyBtnHtml(data.orderId)}${downloadHtml}`;
+        attachCopyButtons(resultEl);
       }
     } catch(e){
       msg.textContent = 'Could not reach the store worker.';
@@ -552,9 +567,10 @@
           ? `<button onclick="deactivatePromo('${p.code}')" style="padding:2px 8px;border-radius:6px;border:1px solid var(--smoke3);background:transparent;color:var(--ash);font-size:0.7rem;cursor:pointer;margin-left:6px;">deactivate</button>`
           : '';
         return `<div style="padding:0.5rem 0;border-bottom:1px solid var(--smoke3);">
-          <span style="font-family:'IBM Plex Mono',monospace;">${short}</span> — ${p.redeemedCount}/${p.maxRedemptions} redeemed — ${status}${deactivateBtn}
+          <span style="font-family:'IBM Plex Mono',monospace;">${short}</span>${copyBtnHtml(p.code)} — ${p.redeemedCount}/${p.maxRedemptions} redeemed — ${status}${deactivateBtn}
         </div>`;
       }).join('');
+      attachCopyButtons(el);
     } catch(e){
       el.textContent = 'Could not reach the store worker.';
     }
@@ -586,7 +602,8 @@
         msg.textContent = '✓ Code created — copy it now and send it to your influencer.';
         msg.className = 'msg ok';
         newCodeEl.style.display = 'block';
-        newCodeEl.textContent = data.promo.code;
+        newCodeEl.innerHTML = `${data.promo.code}${copyBtnHtml(data.promo.code)}`;
+        attachCopyButtons(newCodeEl);
         loadPromoList();
       }
     } catch(e){
